@@ -10,6 +10,25 @@ function getWorkflowsPath() {
   return path.join(app.getPath('userData'), 'workflows.json');
 }
 
+function getSettingsPath() {
+  return path.join(app.getPath('userData'), 'settings.json');
+}
+
+function readSettings() {
+  const settingsPath = getSettingsPath();
+
+  if (!fs.existsSync(settingsPath)) {
+    return { vantageDeliveryFolder: '' };
+  }
+
+  return { vantageDeliveryFolder: '', ...JSON.parse(fs.readFileSync(settingsPath, 'utf8')) };
+}
+
+function writeSettings(settings) {
+  fs.mkdirSync(path.dirname(getSettingsPath()), { recursive: true });
+  fs.writeFileSync(getSettingsPath(), JSON.stringify(settings, null, 2), 'utf8');
+}
+
 function readWorkflows() {
   const workflowsPath = getWorkflowsPath();
 
@@ -173,6 +192,16 @@ app.on('window-all-closed', () => {
 // Vue'dan gelen verileri dinleyip XML üreten fonksiyon
 ipcMain.handle('generate-xml', async (event, data) => {
   try {
+    const settings = readSettings();
+    const deliveryFolder = String(settings.vantageDeliveryFolder || '').trim();
+    if (!deliveryFolder || !fs.existsSync(deliveryFolder)) {
+      return {
+        success: false,
+        code: 'DELIVERY_UNAVAILABLE',
+        error: 'Sunucuya bağlanılamadı: Vantage XML Teslim Klasörüne ulaşılamıyor.'
+      };
+    }
+
     const workflow = {
       name: data.name || data.workflowName,
       actions: data.actions || [{
@@ -192,15 +221,35 @@ ipcMain.handle('generate-xml', async (event, data) => {
     }
     const xmlContent = buildVantageXML(workflow);
 
-    const desktopPath = app.getPath('desktop');
     const safeName = String(workflow.name || 'workflow')
       .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
       .trim() || 'workflow';
-    const filePath = path.join(desktopPath, `${safeName}.xml`);
+    const filePath = path.join(deliveryFolder, `${safeName}.xml`);
     
     fs.writeFileSync(filePath, xmlContent, 'utf8');
     
-    return { success: true, path: filePath };
+    return { success: true, path: filePath, deliveryFolder };
+  } catch (error) {
+    return { success: false, code: 'DELIVERY_WRITE_FAILED', error: `Sunucuya bağlanılamadı: ${error.message}` };
+  }
+});
+
+ipcMain.handle('get-settings', async () => {
+  try {
+    return { success: true, settings: readSettings() };
+  } catch (error) {
+    return { success: false, error: error.message, settings: { vantageDeliveryFolder: '' } };
+  }
+});
+
+ipcMain.handle('save-settings', async (event, settings) => {
+  try {
+    const savedSettings = {
+      ...readSettings(),
+      vantageDeliveryFolder: String(settings.vantageDeliveryFolder || '').trim()
+    };
+    writeSettings(savedSettings);
+    return { success: true, settings: savedSettings };
   } catch (error) {
     return { success: false, error: error.message };
   }

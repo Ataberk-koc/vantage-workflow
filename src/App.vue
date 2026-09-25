@@ -2,7 +2,18 @@
   <div class="app-container">
     <div class="header">
       <h1>Vantage Workflow Builder</h1>
-      <p>Workflow tasarla, yerel olarak sakla ve XML olarak dışa aktar.</p>
+      <p>Workflow tasarla ve Vantage'a güvenle gönder.</p>
+    </div>
+
+    <div class="form-card settings-card">
+      <div class="setting-heading">
+        <label for="delivery-folder">Vantage XML Teslim Klasörü</label>
+        <span>Genel uygulama ayarı</span>
+      </div>
+      <div class="setting-row">
+        <input id="delivery-folder" v-model="settings.vantageDeliveryFolder" type="text" placeholder="\\VantageServer\XML_Drop" />
+        <button class="secondary-btn" @click="persistSettings" :disabled="isLoading">Ayarı kaydet</button>
+      </div>
     </div>
 
     <div class="toolbar">
@@ -78,7 +89,7 @@
       <div class="button-row">
         <button class="secondary-btn" @click="addAction">+ Action ekle</button>
         <button class="submit-btn" @click="saveWorkflow" :disabled="isLoading">Kaydet</button>
-        <button class="submit-btn" @click="generateWorkflow" :disabled="isLoading">XML oluştur</button>
+        <button class="submit-btn" @click="generateWorkflow" :disabled="isLoading">Vantage'a Gönder</button>
         <button class="danger-btn" @click="deleteWorkflow">Sil</button>
       </div>
     </div>
@@ -90,6 +101,16 @@
     <div v-if="message" :class="['alert', isSuccess ? 'alert-success' : 'alert-danger']">
       {{ message }}
     </div>
+
+    <section class="log-panel" aria-label="İşlem günlüğü">
+      <div class="log-header">İşlem Günlüğü</div>
+      <div class="log-content">
+        <div v-if="logs.length === 0" class="log-empty">Henüz işlem kaydı yok.</div>
+        <div v-for="entry in logs" :key="entry.id" :class="['log-line', `log-${entry.level}`]">
+          [{{ entry.time }}] {{ entry.message }}
+        </div>
+      </div>
+    </section>
   </div>
 </template>
 
@@ -105,6 +126,19 @@ const isLoading = ref(false);
 const message = ref('');
 const isSuccess = ref(false);
 const workflowPrompt = ref('');
+const settings = ref({ vantageDeliveryFolder: '' });
+const logs = ref([]);
+
+const addLog = (message, level = 'info') => {
+  const now = new Date();
+  logs.value.push({
+    id: `${now.getTime()}-${Math.random()}`,
+    time: now.toLocaleTimeString('tr-TR', { hour12: false }),
+    message,
+    level
+  });
+  if (logs.value.length > 200) logs.value.shift();
+};
 
 const createAction = () => ({
   id: crypto.randomUUID(),
@@ -172,9 +206,29 @@ const saveWorkflow = async () => {
     workflows.value = workflows.value.map((workflow) => workflow.id === result.workflow.id ? result.workflow : workflow);
     message.value = 'Workflow yerel olarak kaydedildi.';
     isSuccess.value = true;
+    addLog(`Workflow '${result.workflow.name}' yerel olarak kaydedildi.`, 'success');
   } catch (error) {
     message.value = error.message;
     isSuccess.value = false;
+    addLog(`Workflow kaydedilemedi: ${error.message}`, 'error');
+  }
+};
+
+const persistSettings = async () => {
+  try {
+    ensureElectron();
+    const result = await window.electronAPI.saveSettings(JSON.parse(JSON.stringify(settings.value)));
+    if (!result.success) throw new Error(result.error);
+    settings.value = result.settings;
+    message.value = 'Vantage teslim klasörü ayarı kaydedildi.';
+    isSuccess.value = true;
+    addLog(`Vantage teslim klasörü ayarlandı: ${result.settings.vantageDeliveryFolder}`, 'success');
+    return true;
+  } catch (error) {
+    message.value = error.message;
+    isSuccess.value = false;
+    addLog(`Ayar kaydedilemedi: ${error.message}`, 'error');
+    return false;
   }
 };
 
@@ -196,9 +250,11 @@ const generateDraft = async () => {
     selectedWorkflowId.value = result.workflow.id;
     message.value = 'Workflow taslağı oluşturuldu. Klasör yollarını kontrol edip kaydedin.';
     isSuccess.value = true;
+    addLog(`Workflow taslağı oluşturuldu: '${result.workflow.name}'.`, 'info');
   } catch (error) {
     message.value = error.message;
     isSuccess.value = false;
+    addLog(`Taslak oluşturulamadı: ${error.message}`, 'error');
   } finally {
     isLoading.value = false;
   }
@@ -216,12 +272,22 @@ const generateWorkflow = async () => {
 
   try {
     ensureElectron();
+    if (!settings.value.vantageDeliveryFolder.trim()) {
+      throw new Error('Önce Vantage XML Teslim Klasörünü ayarlayın.');
+    }
+
+    if (!await persistSettings()) return;
     const pathValidation = await validatePaths();
     if (!pathValidation.success) throw new Error(pathValidation.error);
+
+    if (!pathValidation.valid) {
+      addLog('Klasör doğrulama uyarısı: bir veya daha fazla workflow yolu bulunamadı.', 'warning');
+    }
 
     if (!pathValidation.valid && !confirmMissingPaths(pathValidation.missing)) {
       message.value = 'XML oluşturma iptal edildi.';
       isSuccess.value = false;
+      addLog(`Workflow '${currentWorkflow.value.name}' gönderilmekten vazgeçildi.`, 'warning');
       return;
     }
 
@@ -232,14 +298,19 @@ const generateWorkflow = async () => {
 
     if (result.success) {
       isSuccess.value = true;
-      message.value = `Başarılı! XML dosyası masaüstüne kaydedildi: ${result.path}`;
+      message.value = `Başarılı! XML Vantage'a gönderildi: ${result.path}`;
+      addLog(`Workflow '${currentWorkflow.value.name}' başarıyla sunucuya iletildi.`, 'success');
     } else {
       isSuccess.value = false;
-      message.value = 'Hata oluştu: ' + result.error;
+      message.value = result.error;
+      addLog(result.code === 'DELIVERY_UNAVAILABLE'
+        ? 'Sunucuya bağlanılamadı. XML gönderimi durduruldu.'
+        : `Gönderim hatası: ${result.error}`, 'error');
     }
   } catch (error) {
     isSuccess.value = false;
     message.value = `İşlem başarısız: ${error.message || error}`;
+    addLog(`Gönderim hatası: ${error.message || error}`, 'error');
     console.error(error);
   } finally {
     isLoading.value = false;
@@ -258,9 +329,11 @@ const deleteWorkflow = async () => {
     selectedWorkflowId.value = '';
     message.value = 'Workflow silindi.';
     isSuccess.value = true;
+    addLog('Workflow silindi.', 'info');
   } catch (error) {
     message.value = error.message;
     isSuccess.value = false;
+    addLog(`Workflow silinemedi: ${error.message}`, 'error');
   }
 };
 
@@ -270,7 +343,14 @@ const loadWorkflows = async () => {
   if (result.success) workflows.value = result.workflows;
 };
 
+const loadSettings = async () => {
+  if (!window.electronAPI) return;
+  const result = await window.electronAPI.getSettings();
+  if (result.success) settings.value = result.settings;
+};
+
 loadWorkflows();
+loadSettings();
 </script>
 
 <style>
@@ -480,5 +560,82 @@ body {
   background-color: rgba(248, 113, 113, 0.2);
   color: #f87171;
   border: 1px solid #f87171;
+}
+.settings-card {
+  margin-bottom: 20px;
+}
+.setting-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  margin-bottom: 8px;
+}
+.setting-heading label {
+  color: #cbd5e1;
+  font-weight: bold;
+}
+.setting-heading span {
+  color: #94a3b8;
+  font-size: 12px;
+}
+.setting-row {
+  display: flex;
+  gap: 10px;
+}
+.setting-row input {
+  flex: 1;
+  min-width: 0;
+}
+.log-panel {
+  margin-top: 20px;
+  overflow: hidden;
+  border: 1px solid #334155;
+  border-radius: 8px;
+  background: #090d12;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+}
+.log-header {
+  padding: 10px 14px;
+  border-bottom: 1px solid #334155;
+  color: #94a3b8;
+  font-size: 12px;
+  font-weight: bold;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.log-content {
+  max-height: 180px;
+  overflow-y: auto;
+  padding: 12px 14px;
+  color: #cbd5e1;
+  font-family: Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+}
+.log-line {
+  white-space: pre-wrap;
+}
+.log-success {
+  color: #4ade80;
+}
+.log-warning {
+  color: #facc15;
+}
+.log-error {
+  color: #f87171;
+}
+.log-empty {
+  color: #64748b;
+}
+@media (max-width: 620px) {
+  .setting-row {
+    flex-direction: column;
+  }
+  .setting-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
 }
 </style>

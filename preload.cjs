@@ -6,5 +6,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveWorkflow: (workflow) => ipcRenderer.invoke('save-workflow', workflow),
   deleteWorkflow: (workflowId) => ipcRenderer.invoke('delete-workflow', workflowId),
   generateWorkflow: (description) => ipcRenderer.invoke('generate-workflow', description),
-  validatePaths: (workflow) => ipcRenderer.invoke('validate-paths', workflow)
+  validatePaths: (workflow) => ipcRenderer.invoke('validate-paths', workflow),
+  getSettings: () => ipcRenderer.invoke('get-settings'),
+  saveSettings: (settings) => ipcRenderer.invoke('save-settings', settings)
 });
