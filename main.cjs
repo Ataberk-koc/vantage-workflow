@@ -158,3 +158,40 @@ ipcMain.handle('delete-workflow', async (event, workflowId) => {
     return { success: false, error: error.message };
   }
 });
+
+ipcMain.handle('generate-workflow', async (event, description) => {
+  const prompt = String(description || '').trim();
+  const normalizedPrompt = prompt.toLocaleLowerCase('tr-TR');
+
+  if (!prompt) {
+    return { success: false, error: 'Workflow açıklaması boş olamaz.' };
+  }
+
+  const actions = [];
+  if (/(watch|izle|gelen|klasör|folder)/i.test(normalizedPrompt)) {
+    actions.push({ type: 'Watch', watchFolder: '', outputFolder: '' });
+  }
+  if (/(transcode|encode|kodla|h264|h265|prores|dönüştür)/i.test(normalizedPrompt)) {
+    actions.push({ type: 'Transcode', watchFolder: '', outputFolder: '' });
+  }
+  if (/(deploy|çıktı|gönder|yayınla|output)/i.test(normalizedPrompt)) {
+    actions.push({ type: 'Deploy', watchFolder: '', outputFolder: '' });
+  }
+
+  const workflowActions = actions.length > 0
+    ? actions
+    : [{ type: 'Watch', watchFolder: '', outputFolder: '' }];
+
+  return {
+    success: true,
+    workflow: {
+      id: `workflow-${Date.now()}`,
+      name: prompt.slice(0, 40).replace(/\s+/g, '_'),
+      description: prompt,
+      actions: workflowActions.map((action, index) => ({
+        ...action,
+        id: `${Date.now()}-${index}`
+      }))
+    }
+  };
+});
