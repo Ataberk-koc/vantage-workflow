@@ -2,6 +2,8 @@
   "name": "vantage-workflow-builder",
   "private": true,
   "version": "0.0.0",
+  "description": "Telestream Vantage workflow builder and XML submitter",
+  "author": "Ataberk-koc",
   "type": "module",
   "main": "main.cjs",
   "scripts": {
@@ -9,7 +11,8 @@
     "build": "vite build",
     "preview": "vite preview",
     "electron": "electron .",
-    "start": "concurrently \"npm run dev\" \"npm run electron\""
+    "start": "concurrently \"npm run dev\" \"npm run electron\"",
+    "dist": "npm run build && electron-builder"
   },
   "dependencies": {
     "vue": "^3.5.42",
@@ -25,5 +28,34 @@
   },
   "allowScripts": {
     "electron@34.5.8": true
+  },
+  "build": {
+    "appId": "com.ataberk.vantageworkflowbuilder",
+    "productName": "Vantage Workflow Builder",
+    "icon": "src/assets/hero.png",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "main.cjs",
+      "preload.cjs",
+      "package.json"
+    ],
+    "win": {
+      "target": {
+        "target": "nsis",
+        "arch": [
+          "x64"
+        ]
+      },
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }
