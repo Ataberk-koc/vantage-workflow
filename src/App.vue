@@ -182,7 +182,7 @@ const generateWorkflow = async () => {
     }
   } catch (error) {
     isSuccess.value = false;
-    message.value = 'Uygulama arka planıyla iletişim kurulamadı.';
+    message.value = `İşlem başarısız: ${error.message || error}`;
     console.error(error);
   } finally {
     isLoading.value = false;

@@ -34,7 +34,8 @@ function escapeXml(value) {
 }
 
 function createWorkflowXml(workflow) {
-  const actions = workflow.actions.map((action) => `
+  const workflowActions = Array.isArray(workflow.actions) ? workflow.actions : [];
+  const actions = workflowActions.map((action) => `
         <Action type="${escapeXml(action.type)}">
             <Property name="WatchDirectory" value="${escapeXml(action.watchFolder)}" />
             <Property name="OutputDirectory" value="${escapeXml(action.outputFolder)}" />
@@ -79,6 +80,14 @@ async function createWindow() {
       contextIsolation: true,
       preload: path.join(__dirname, 'preload.cjs')
     }
+  });
+
+  mainWindow.webContents.on('preload-error', (event, preloadPath, error) => {
+    console.error(`Preload failed (${preloadPath}):`, error);
+  });
+
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+    console.error(`Page failed to load (${errorCode}): ${errorDescription} - ${validatedURL}`);
   });
 
   if (app.isPackaged) {
