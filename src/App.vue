@@ -56,7 +56,10 @@ const generateWorkflow = async () => {
   message.value = '';
 
   try {
-    // window.require yerine oluşturduğumuz preload (electronAPI) köprüsünü kullanıyoruz
+    if (!window.electronAPI?.generateXml) {
+      throw new Error('Electron API is unavailable. Start the app with npm start.');
+    }
+
     const result = await window.electronAPI.generateXml(formData.value);
 
     if (result.success) {

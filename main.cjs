@@ -1,10 +1,33 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const fs = require('fs');
+const http = require('http');
 
 let mainWindow;
 
-function createWindow() {
+function waitForDevServer(url, retries = 30) {
+  return new Promise((resolve, reject) => {
+    const check = () => {
+      const request = http.get(url, (response) => {
+        response.resume();
+        resolve();
+      });
+
+      request.on('error', () => {
+        if (retries <= 0) {
+          reject(new Error(`Dev server is not available at ${url}`));
+          return;
+        }
+
+        setTimeout(() => waitForDevServer(url, retries - 1).then(resolve, reject), 500);
+      });
+    };
+
+    check();
+  });
+}
+
+async function createWindow() {
   mainWindow = new BrowserWindow({
    width: 900,
     height: 700,
@@ -15,10 +38,18 @@ function createWindow() {
     }
   });
 
-  mainWindow.loadURL('http://localhost:5173');
+  if (app.isPackaged) {
+    await mainWindow.loadFile(path.join(__dirname, 'dist', 'index.html'));
+  } else {
+    await waitForDevServer('http://localhost:5173');
+    await mainWindow.loadURL('http://localhost:5173');
+  }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(createWindow).catch((error) => {
+  console.error('Failed to start application:', error);
+  app.quit();
+});
 
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit();
