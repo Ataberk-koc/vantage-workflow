@@ -5,6 +5,49 @@ const http = require('http');
 
 let mainWindow;
 
+function getWorkflowsPath() {
+  return path.join(app.getPath('userData'), 'workflows.json');
+}
+
+function readWorkflows() {
+  const workflowsPath = getWorkflowsPath();
+
+  if (!fs.existsSync(workflowsPath)) {
+    return [];
+  }
+
+  return JSON.parse(fs.readFileSync(workflowsPath, 'utf8'));
+}
+
+function writeWorkflows(workflows) {
+  fs.mkdirSync(path.dirname(getWorkflowsPath()), { recursive: true });
+  fs.writeFileSync(getWorkflowsPath(), JSON.stringify(workflows, null, 2), 'utf8');
+}
+
+function escapeXml(value) {
+  return String(value ?? '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&apos;');
+}
+
+function createWorkflowXml(workflow) {
+  const actions = workflow.actions.map((action) => `
+        <Action type="${escapeXml(action.type)}">
+            <Property name="WatchDirectory" value="${escapeXml(action.watchFolder)}" />
+            <Property name="OutputDirectory" value="${escapeXml(action.outputFolder)}" />
+        </Action>`).join('');
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<VantageWorkflow>
+    <Name>${escapeXml(workflow.name)}</Name>
+    <Actions>${actions}
+    </Actions>
+</VantageWorkflow>`;
+}
+
 function waitForDevServer(url, retries = 30) {
   return new Promise((resolve, reject) => {
     const check = () => {
@@ -58,28 +101,59 @@ app.on('window-all-closed', () => {
 // Vue'dan gelen verileri dinleyip XML üreten fonksiyon
 ipcMain.handle('generate-xml', async (event, data) => {
   try {
-    // Şimdilik test için basit bir XML şablonu oluşturuyoruz.
-    // İleride buraya gerçek Vantage XML şablonumuzu okutacağız.
-    let xmlContent = `<?xml version="1.0" encoding="UTF-8"?>
-<VantageWorkflow>
-    <Name>${data.workflowName}</Name>
-    <Actions>
-        <Action type="Watch">
-            <Property name="WatchDirectory" value="${data.watchFolder}" />
-        </Action>
-        <Action type="Deploy">
-            <Property name="OutputDirectory" value="${data.outputFolder}" />
-        </Action>
-    </Actions>
-</VantageWorkflow>`;
+    const workflow = {
+      name: data.name || data.workflowName,
+      actions: data.actions || [{
+        type: 'Watch',
+        watchFolder: data.watchFolder,
+        outputFolder: data.outputFolder
+      }]
+    };
+    const xmlContent = createWorkflowXml(workflow);
 
-    // Dosyayı doğrudan Masaüstüne kaydedelim (Test etmesi kolay olsun)
     const desktopPath = app.getPath('desktop');
-    const filePath = path.join(desktopPath, `${data.workflowName}.xml`);
+    const safeName = workflow.name.replace(/[<>:"/\\|?*]/g, '_').trim() || 'workflow';
+    const filePath = path.join(desktopPath, `${safeName}.xml`);
     
     fs.writeFileSync(filePath, xmlContent, 'utf8');
     
     return { success: true, path: filePath };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('list-workflows', async () => {
+  try {
+    return { success: true, workflows: readWorkflows() };
+  } catch (error) {
+    return { success: false, error: error.message, workflows: [] };
+  }
+});
+
+ipcMain.handle('save-workflow', async (event, workflow) => {
+  try {
+    const workflows = readWorkflows();
+    const savedWorkflow = { ...workflow, updatedAt: new Date().toISOString() };
+    const index = workflows.findIndex((item) => item.id === savedWorkflow.id);
+
+    if (index >= 0) {
+      workflows[index] = savedWorkflow;
+    } else {
+      workflows.push(savedWorkflow);
+    }
+
+    writeWorkflows(workflows);
+    return { success: true, workflow: savedWorkflow };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-workflow', async (event, workflowId) => {
+  try {
+    writeWorkflows(readWorkflows().filter((workflow) => workflow.id !== workflowId));
+    return { success: true };
   } catch (error) {
     return { success: false, error: error.message };
   }

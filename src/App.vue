@@ -2,28 +2,55 @@
   <div class="app-container">
     <div class="header">
       <h1>Vantage Workflow Builder</h1>
-      <p>Yeni bir iş akışı oluşturmak için aşağıdaki bilgileri doldurun.</p>
+      <p>Workflow tasarla, yerel olarak sakla ve XML olarak dışa aktar.</p>
     </div>
 
-    <div class="form-card">
+    <div class="toolbar">
+      <button class="secondary-btn" @click="createWorkflow">+ Yeni Workflow</button>
+      <select v-model="selectedWorkflowId" @change="selectWorkflow">
+        <option disabled value="">Workflow seç</option>
+        <option v-for="workflow in workflows" :key="workflow.id" :value="workflow.id">
+          {{ workflow.name }}
+        </option>
+      </select>
+    </div>
+
+    <div v-if="currentWorkflow" class="form-card">
       <div class="form-group">
         <label>Workflow Adı:</label>
-        <input v-model="formData.workflowName" type="text" placeholder="Örn: Gece_Bulteni_H264" />
+        <input v-model="currentWorkflow.name" type="text" placeholder="Örn: Gece_Bulteni_H264" />
       </div>
 
-      <div class="form-group">
-        <label>İzlenecek Klasör (Watch Folder):</label>
-        <input v-model="formData.watchFolder" type="text" placeholder="\\192.168.1.10\Gelenler" />
+      <div v-for="(action, index) in currentWorkflow.actions" :key="action.id" class="action-row">
+        <div class="form-group">
+          <label>Action {{ index + 1 }}:</label>
+          <select v-model="action.type">
+            <option value="Watch">Watch</option>
+            <option value="Deploy">Deploy</option>
+            <option value="Transcode">Transcode</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>İzlenecek klasör:</label>
+          <input v-model="action.watchFolder" type="text" placeholder="\\192.168.1.10\Gelenler" />
+        </div>
+        <div class="form-group">
+          <label>Çıktı klasörü:</label>
+          <input v-model="action.outputFolder" type="text" placeholder="\\192.168.1.10\Gidenler" />
+        </div>
+        <button v-if="currentWorkflow.actions.length > 1" class="icon-btn" title="Action sil" @click="removeAction(index)">×</button>
       </div>
 
-      <div class="form-group">
-        <label>Çıktı Klasörü (Deploy Folder):</label>
-        <input v-model="formData.outputFolder" type="text" placeholder="\\192.168.1.10\Gidenler" />
+      <div class="button-row">
+        <button class="secondary-btn" @click="addAction">+ Action ekle</button>
+        <button class="submit-btn" @click="saveWorkflow" :disabled="isLoading">Kaydet</button>
+        <button class="submit-btn" @click="generateWorkflow" :disabled="isLoading">XML oluştur</button>
+        <button class="danger-btn" @click="deleteWorkflow">Sil</button>
       </div>
+    </div>
 
-      <button @click="generateWorkflow" class="submit-btn" :disabled="isLoading">
-        {{ isLoading ? 'Oluşturuluyor...' : 'XML Oluştur ve Kaydet' }}
-      </button>
+    <div v-else class="form-card empty-state">
+      <p>Başlamak için yeni bir workflow oluştur.</p>
     </div>
 
     <div v-if="message" :class="['alert', isSuccess ? 'alert-success' : 'alert-danger']">
@@ -35,19 +62,71 @@
 <script setup>
 import { ref } from 'vue';
 
-const formData = ref({
-  workflowName: '',
-  watchFolder: '',
-  outputFolder: ''
-});
+const workflows = ref([]);
+const currentWorkflow = ref(null);
+const selectedWorkflowId = ref('');
 
 const isLoading = ref(false);
 const message = ref('');
 const isSuccess = ref(false);
 
+const createAction = () => ({
+  id: crypto.randomUUID(),
+  type: 'Watch',
+  watchFolder: '',
+  outputFolder: ''
+});
+
+const createWorkflow = () => {
+  const workflow = {
+    id: crypto.randomUUID(),
+    name: `Yeni Workflow ${workflows.value.length + 1}`,
+    actions: [createAction()]
+  };
+
+  workflows.value.push(workflow);
+  currentWorkflow.value = workflow;
+  selectedWorkflowId.value = workflow.id;
+  message.value = '';
+};
+
+const selectWorkflow = () => {
+  currentWorkflow.value = workflows.value.find((workflow) => workflow.id === selectedWorkflowId.value) || null;
+};
+
+const addAction = () => currentWorkflow.value?.actions.push(createAction());
+
+const removeAction = (index) => currentWorkflow.value?.actions.splice(index, 1);
+
+const ensureElectron = () => {
+  if (!window.electronAPI) {
+    throw new Error('Bu işlem için uygulamayı npm start ile açın.');
+  }
+};
+
+const saveWorkflow = async () => {
+  if (!currentWorkflow.value?.name.trim()) {
+    message.value = 'Workflow adı zorunlu.';
+    isSuccess.value = false;
+    return;
+  }
+
+  try {
+    ensureElectron();
+    const result = await window.electronAPI.saveWorkflow(currentWorkflow.value);
+    if (!result.success) throw new Error(result.error);
+    workflows.value = workflows.value.map((workflow) => workflow.id === result.workflow.id ? result.workflow : workflow);
+    message.value = 'Workflow yerel olarak kaydedildi.';
+    isSuccess.value = true;
+  } catch (error) {
+    message.value = error.message;
+    isSuccess.value = false;
+  }
+};
+
 const generateWorkflow = async () => {
-  if (!formData.value.workflowName) {
-    message.value = 'Lütfen en azından bir Workflow Adı girin!';
+  if (!currentWorkflow.value?.name.trim()) {
+    message.value = 'Workflow adı zorunlu.';
     isSuccess.value = false;
     return;
   }
@@ -56,17 +135,12 @@ const generateWorkflow = async () => {
   message.value = '';
 
   try {
-    if (!window.electronAPI?.generateXml) {
-      throw new Error('Electron API is unavailable. Start the app with npm start.');
-    }
-
-    const result = await window.electronAPI.generateXml(formData.value);
+    ensureElectron();
+    const result = await window.electronAPI.generateXml(currentWorkflow.value);
 
     if (result.success) {
       isSuccess.value = true;
       message.value = `Başarılı! XML dosyası masaüstüne kaydedildi: ${result.path}`;
-      // Formu temizle
-      formData.value = { workflowName: '', watchFolder: '', outputFolder: '' };
     } else {
       isSuccess.value = false;
       message.value = 'Hata oluştu: ' + result.error;
@@ -79,6 +153,32 @@ const generateWorkflow = async () => {
     isLoading.value = false;
   }
 };
+
+const deleteWorkflow = async () => {
+  if (!currentWorkflow.value) return;
+
+  try {
+    ensureElectron();
+    const result = await window.electronAPI.deleteWorkflow(currentWorkflow.value.id);
+    if (!result.success) throw new Error(result.error);
+    workflows.value = workflows.value.filter((workflow) => workflow.id !== currentWorkflow.value.id);
+    currentWorkflow.value = null;
+    selectedWorkflowId.value = '';
+    message.value = 'Workflow silindi.';
+    isSuccess.value = true;
+  } catch (error) {
+    message.value = error.message;
+    isSuccess.value = false;
+  }
+};
+
+const loadWorkflows = async () => {
+  if (!window.electronAPI) return;
+  const result = await window.electronAPI.listWorkflows();
+  if (result.success) workflows.value = result.workflows;
+};
+
+loadWorkflows();
 </script>
 
 <style>
@@ -111,6 +211,63 @@ body {
   padding: 25px;
   border-radius: 10px;
   box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+}
+.toolbar,
+.button-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 20px;
+}
+.toolbar select,
+.form-group select {
+  flex: 1;
+  padding: 10px;
+  border-radius: 5px;
+  border: 1px solid #475569;
+  background-color: #1e1e2f;
+  color: #fff;
+  font-size: 14px;
+}
+.action-row {
+  position: relative;
+  border-top: 1px solid #475569;
+  padding-top: 18px;
+}
+.icon-btn {
+  position: absolute;
+  top: 12px;
+  right: 0;
+  border: 0;
+  background: transparent;
+  color: #f87171;
+  font-size: 22px;
+  cursor: pointer;
+}
+.secondary-btn,
+.danger-btn {
+  padding: 10px 14px;
+  border-radius: 5px;
+  font-weight: bold;
+  cursor: pointer;
+}
+.secondary-btn {
+  background: #475569;
+  color: #fff;
+  border: 1px solid #64748b;
+}
+.danger-btn {
+  background: transparent;
+  color: #f87171;
+  border: 1px solid #f87171;
+}
+.button-row .submit-btn {
+  width: auto;
+  flex: 1;
+}
+.empty-state {
+  text-align: center;
+  color: #94a3b8;
 }
 .form-group {
   margin-bottom: 20px;
