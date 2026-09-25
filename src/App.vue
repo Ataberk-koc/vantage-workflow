@@ -15,6 +15,14 @@
       </select>
     </div>
 
+    <div class="form-card prompt-card">
+      <label>Otomatik workflow taslağı:</label>
+      <div class="prompt-row">
+        <input v-model="workflowPrompt" type="text" placeholder="Örn: Gelen klasöründeki videoları H264'e dönüştür ve çıktı klasörüne gönder" @keyup.enter="generateDraft" />
+        <button class="secondary-btn" @click="generateDraft" :disabled="isLoading">Taslak oluştur</button>
+      </div>
+    </div>
+
     <div v-if="currentWorkflow" class="form-card">
       <div class="form-group">
         <label>Workflow Adı:</label>
@@ -69,6 +77,7 @@ const selectedWorkflowId = ref('');
 const isLoading = ref(false);
 const message = ref('');
 const isSuccess = ref(false);
+const workflowPrompt = ref('');
 
 const createAction = () => ({
   id: crypto.randomUUID(),
@@ -121,6 +130,32 @@ const saveWorkflow = async () => {
   } catch (error) {
     message.value = error.message;
     isSuccess.value = false;
+  }
+};
+
+const generateDraft = async () => {
+  if (!workflowPrompt.value.trim()) {
+    message.value = 'Taslak oluşturmak için bir açıklama yazın.';
+    isSuccess.value = false;
+    return;
+  }
+
+  try {
+    ensureElectron();
+    isLoading.value = true;
+    const result = await window.electronAPI.generateWorkflow(workflowPrompt.value);
+    if (!result.success) throw new Error(result.error);
+
+    workflows.value.push(result.workflow);
+    currentWorkflow.value = result.workflow;
+    selectedWorkflowId.value = result.workflow.id;
+    message.value = 'Workflow taslağı oluşturuldu. Klasör yollarını kontrol edip kaydedin.';
+    isSuccess.value = true;
+  } catch (error) {
+    message.value = error.message;
+    isSuccess.value = false;
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -218,6 +253,22 @@ body {
   gap: 10px;
   align-items: center;
   margin-bottom: 20px;
+}
+.prompt-card {
+  margin-bottom: 20px;
+}
+.prompt-card label {
+  display: block;
+  margin-bottom: 8px;
+  color: #cbd5e1;
+  font-weight: bold;
+}
+.prompt-row {
+  display: flex;
+  gap: 10px;
+}
+.prompt-row input {
+  flex: 1;
 }
 .toolbar select,
 .form-group select {
