@@ -29,7 +29,10 @@
         <input v-model="currentWorkflow.name" type="text" placeholder="Örn: Gece_Bulteni_H264" />
       </div>
 
-      <div v-for="(action, index) in currentWorkflow.actions" :key="action.id" class="action-row">
+      <draggable v-model="currentWorkflow.actions" item-key="id" handle=".drag-handle" class="action-list" animation="180">
+        <template #item="{ element: action, index }">
+        <div class="action-row">
+          <button class="drag-handle" type="button" title="Action sırasını değiştirmek için sürükle">☷</button>
         <div class="form-group">
           <label>Action {{ index + 1 }}:</label>
           <select v-model="action.type">
@@ -68,7 +71,9 @@
           </select>
         </div>
         <button v-if="currentWorkflow.actions.length > 1" class="icon-btn" title="Action sil" @click="removeAction(index)">×</button>
-      </div>
+        </div>
+        </template>
+      </draggable>
 
       <div class="button-row">
         <button class="secondary-btn" @click="addAction">+ Action ekle</button>
@@ -90,6 +95,7 @@
 
 <script setup>
 import { ref } from 'vue';
+import draggable from 'vuedraggable';
 
 const workflows = ref([]);
 const currentWorkflow = ref(null);
@@ -132,6 +138,16 @@ const insertVariable = (action, field, event) => {
   const variable = event.target.value;
   if (variable) action[field] = `${action[field] || ''}${variable}`;
   event.target.value = '';
+};
+
+const validatePaths = async () => {
+  ensureElectron();
+  return window.electronAPI.validatePaths(toPlainWorkflow());
+};
+
+const confirmMissingPaths = (missingPaths) => {
+  const pathList = missingPaths.map(({ type, path }) => `${type}: ${path}`).join('\n');
+  return window.confirm(`Uyarı: Belirtilen ağ yoluna ulaşılamıyor. Sunucu kapalı olabilir.\n\n${pathList}\n\nYine de XML oluşturulsun mu?`);
 };
 
 const ensureElectron = () => {
@@ -200,7 +216,19 @@ const generateWorkflow = async () => {
 
   try {
     ensureElectron();
-    const result = await window.electronAPI.generateXml(toPlainWorkflow());
+    const pathValidation = await validatePaths();
+    if (!pathValidation.success) throw new Error(pathValidation.error);
+
+    if (!pathValidation.valid && !confirmMissingPaths(pathValidation.missing)) {
+      message.value = 'XML oluşturma iptal edildi.';
+      isSuccess.value = false;
+      return;
+    }
+
+    const result = await window.electronAPI.generateXml({
+      ...toPlainWorkflow(),
+      allowMissingPaths: !pathValidation.valid
+    });
 
     if (result.success) {
       isSuccess.value = true;
@@ -314,9 +342,27 @@ body {
   border-top: 1px solid #475569;
   padding-top: 18px;
   display: grid;
-  grid-template-columns: minmax(120px, 0.7fr) minmax(160px, 1fr) minmax(220px, 1.5fr);
+  grid-template-columns: 32px minmax(120px, 0.7fr) minmax(160px, 1fr) minmax(220px, 1.5fr);
   gap: 12px;
   align-items: start;
+}
+.action-list {
+  display: grid;
+  gap: 12px;
+}
+.drag-handle {
+  align-self: center;
+  justify-self: start;
+  width: 32px;
+  height: 32px;
+  border: 1px solid #64748b;
+  border-radius: 5px;
+  background: #475569;
+  color: #fff;
+  cursor: grab;
+}
+.drag-handle:active {
+  cursor: grabbing;
 }
 .icon-btn {
   position: absolute;

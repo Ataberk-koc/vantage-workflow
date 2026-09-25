@@ -41,6 +41,35 @@ function toVantagePath(value) {
     .replaceAll('{Time}', '$(Time)');
 }
 
+function getWorkflowPaths(workflow) {
+  const paths = [];
+  const actions = Array.isArray(workflow.actions) ? workflow.actions : [];
+
+  for (const action of actions) {
+    if ((action.type === 'Watch' || action.type === 'Transcode') && action.watchFolder) {
+      paths.push({ type: 'Watch', path: action.watchFolder });
+    }
+    if ((action.type === 'Deploy' || action.type === 'Transcode') && action.outputFolder) {
+      paths.push({ type: 'Deploy', path: action.outputFolder });
+    }
+  }
+
+  return paths;
+}
+
+function validateWorkflowPaths(workflow) {
+  const paths = getWorkflowPaths(workflow);
+  const missing = paths.filter(({ path: folderPath }) => {
+    const variableIndex = folderPath.search(/\{(?:OriginalName|Date|Time)\}|\$\((?:OriginalName|Date|Time)\)/);
+    const validationPath = variableIndex >= 0
+      ? folderPath.slice(0, variableIndex).replace(/[\\/]+$/, '')
+      : folderPath;
+
+    return !fs.existsSync(validationPath || path.dirname(folderPath));
+  });
+  return { valid: missing.length === 0, checked: paths, missing };
+}
+
 function buildVantageXML(workflowData) {
   const workflowActions = Array.isArray(workflowData.actions) ? workflowData.actions : [];
   const actions = workflowActions.map((action) => {
@@ -152,6 +181,15 @@ ipcMain.handle('generate-xml', async (event, data) => {
         outputFolder: data.outputFolder
       }]
     };
+    const pathValidation = validateWorkflowPaths(workflow);
+    if (!pathValidation.valid && !data.allowMissingPaths) {
+      return {
+        success: false,
+        requiresConfirmation: true,
+        missingPaths: pathValidation.missing,
+        error: 'Bir veya daha fazla klasör yolu bulunamadı.'
+      };
+    }
     const xmlContent = buildVantageXML(workflow);
 
     const desktopPath = app.getPath('desktop');
@@ -239,4 +277,12 @@ ipcMain.handle('generate-workflow', async (event, description) => {
       }))
     }
   };
+});
+
+ipcMain.handle('validate-paths', async (event, workflow) => {
+  try {
+    return { success: true, ...validateWorkflowPaths(workflow) };
+  } catch (error) {
+    return { success: false, error: error.message, valid: false, missing: [] };
+  }
 });
