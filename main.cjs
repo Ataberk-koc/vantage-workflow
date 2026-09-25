@@ -1,4 +1,5 @@
 const { app, BrowserWindow, ipcMain } = require('electron');
+const { Builder } = require('xml2js');
 const path = require('path');
 const fs = require('fs');
 const http = require('http');
@@ -24,29 +25,55 @@ function writeWorkflows(workflows) {
   fs.writeFileSync(getWorkflowsPath(), JSON.stringify(workflows, null, 2), 'utf8');
 }
 
-function escapeXml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&apos;');
+function createProperty(name, value) {
+  return {
+    $: {
+      name,
+      value: String(value ?? '')
+    }
+  };
 }
 
-function createWorkflowXml(workflow) {
-  const workflowActions = Array.isArray(workflow.actions) ? workflow.actions : [];
-  const actions = workflowActions.map((action) => `
-        <Action type="${escapeXml(action.type)}">
-            <Property name="WatchDirectory" value="${escapeXml(action.watchFolder)}" />
-            <Property name="OutputDirectory" value="${escapeXml(action.outputFolder)}" />
-        </Action>`).join('');
+function buildVantageXML(workflowData) {
+  const workflowActions = Array.isArray(workflowData.actions) ? workflowData.actions : [];
+  const actions = workflowActions.map((action) => {
+    const properties = [];
 
-  return `<?xml version="1.0" encoding="UTF-8"?>
-<VantageWorkflow>
-    <Name>${escapeXml(workflow.name)}</Name>
-    <Actions>${actions}
-    </Actions>
-</VantageWorkflow>`;
+    switch (action.type) {
+      case 'Watch':
+        properties.push(createProperty('WatchDirectory', action.watchFolder));
+        break;
+      case 'Transcode':
+        properties.push(
+          createProperty('WatchDirectory', action.watchFolder),
+          createProperty('OutputDirectory', action.outputFolder),
+          createProperty('Preset', action.preset || action.profile || '')
+        );
+        break;
+      case 'Deploy':
+        properties.push(createProperty('OutputDirectory', action.outputFolder));
+        break;
+      default:
+        throw new Error(`Desteklenmeyen Vantage action tipi: ${action.type}`);
+    }
+
+    return {
+      $: { type: action.type },
+      Property: properties
+    };
+  });
+
+  const builder = new Builder({
+    xmldec: { version: '1.0', encoding: 'UTF-8' },
+    renderOpts: { pretty: true, indent: '    ', newline: '\n' }
+  });
+
+  return builder.buildObject({
+    VantageWorkflow: {
+      Name: String(workflowData.name || 'workflow'),
+      Actions: { Action: actions }
+    }
+  });
 }
 
 function waitForDevServer(url, retries = 30) {
@@ -118,10 +145,12 @@ ipcMain.handle('generate-xml', async (event, data) => {
         outputFolder: data.outputFolder
       }]
     };
-    const xmlContent = createWorkflowXml(workflow);
+    const xmlContent = buildVantageXML(workflow);
 
     const desktopPath = app.getPath('desktop');
-    const safeName = workflow.name.replace(/[<>:"/\\|?*]/g, '_').trim() || 'workflow';
+    const safeName = String(workflow.name || 'workflow')
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '_')
+      .trim() || 'workflow';
     const filePath = path.join(desktopPath, `${safeName}.xml`);
     
     fs.writeFileSync(filePath, xmlContent, 'utf8');
