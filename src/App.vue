@@ -113,6 +113,8 @@ const ensureElectron = () => {
   }
 };
 
+const toPlainWorkflow = () => JSON.parse(JSON.stringify(currentWorkflow.value));
+
 const saveWorkflow = async () => {
   if (!currentWorkflow.value?.name.trim()) {
     message.value = 'Workflow adı zorunlu.';
@@ -122,7 +124,7 @@ const saveWorkflow = async () => {
 
   try {
     ensureElectron();
-    const result = await window.electronAPI.saveWorkflow(currentWorkflow.value);
+    const result = await window.electronAPI.saveWorkflow(toPlainWorkflow());
     if (!result.success) throw new Error(result.error);
     workflows.value = workflows.value.map((workflow) => workflow.id === result.workflow.id ? result.workflow : workflow);
     message.value = 'Workflow yerel olarak kaydedildi.';
@@ -171,7 +173,7 @@ const generateWorkflow = async () => {
 
   try {
     ensureElectron();
-    const result = await window.electronAPI.generateXml(currentWorkflow.value);
+    const result = await window.electronAPI.generateXml(toPlainWorkflow());
 
     if (result.success) {
       isSuccess.value = true;
