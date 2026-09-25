@@ -38,13 +38,34 @@
             <option value="Transcode">Transcode</option>
           </select>
         </div>
-        <div class="form-group">
+        <div v-if="action.type === 'Transcode'" class="form-group">
+          <label>Encoder Profile:</label>
+          <select v-model="action.profile">
+            <option value="H264_1080p_Web">H264_1080p_Web</option>
+            <option value="ProRes_422_HQ">ProRes_422_HQ</option>
+            <option value="XDCAM_HD50">XDCAM_HD50</option>
+            <option value="Audio_Only_WAV">Audio_Only_WAV</option>
+          </select>
+        </div>
+        <div v-if="action.type === 'Watch' || action.type === 'Transcode'" class="form-group path-group">
           <label>İzlenecek klasör:</label>
           <input v-model="action.watchFolder" type="text" placeholder="\\192.168.1.10\Gelenler" />
+          <select class="variable-select" title="Watch klasörüne değişken ekle" @change="insertVariable(action, 'watchFolder', $event)">
+            <option value="">Değişken Ekle</option>
+            <option value="{OriginalName}">{OriginalName}</option>
+            <option value="{Date}">{Date}</option>
+            <option value="{Time}">{Time}</option>
+          </select>
         </div>
-        <div class="form-group">
+        <div v-if="action.type === 'Deploy' || action.type === 'Transcode'" class="form-group path-group">
           <label>Çıktı klasörü:</label>
           <input v-model="action.outputFolder" type="text" placeholder="\\192.168.1.10\Gidenler" />
+          <select class="variable-select" title="Çıktı klasörüne değişken ekle" @change="insertVariable(action, 'outputFolder', $event)">
+            <option value="">Değişken Ekle</option>
+            <option value="{OriginalName}">{OriginalName}</option>
+            <option value="{Date}">{Date}</option>
+            <option value="{Time}">{Time}</option>
+          </select>
         </div>
         <button v-if="currentWorkflow.actions.length > 1" class="icon-btn" title="Action sil" @click="removeAction(index)">×</button>
       </div>
@@ -106,6 +127,12 @@ const selectWorkflow = () => {
 const addAction = () => currentWorkflow.value?.actions.push(createAction());
 
 const removeAction = (index) => currentWorkflow.value?.actions.splice(index, 1);
+
+const insertVariable = (action, field, event) => {
+  const variable = event.target.value;
+  if (variable) action[field] = `${action[field] || ''}${variable}`;
+  event.target.value = '';
+};
 
 const ensureElectron = () => {
   if (!window.electronAPI) {
@@ -286,6 +313,10 @@ body {
   position: relative;
   border-top: 1px solid #475569;
   padding-top: 18px;
+  display: grid;
+  grid-template-columns: minmax(120px, 0.7fr) minmax(160px, 1fr) minmax(220px, 1.5fr);
+  gap: 12px;
+  align-items: start;
 }
 .icon-btn {
   position: absolute;
@@ -332,13 +363,42 @@ body {
   color: #cbd5e1;
 }
 .form-group input {
-  width: 95%;
+  width: 100%;
+  box-sizing: border-box;
   padding: 10px;
   border-radius: 5px;
   border: 1px solid #475569;
   background-color: #1e1e2f;
   color: #fff;
   font-size: 14px;
+}
+.path-group {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.path-group label {
+  grid-column: 1 / -1;
+}
+.variable-select {
+  min-width: 116px;
+  padding: 10px 6px;
+  border-radius: 5px;
+  border: 1px solid #64748b;
+  background: #475569;
+  color: #fff;
+  font-size: 12px;
+}
+@media (max-width: 720px) {
+  .action-row {
+    grid-template-columns: 1fr;
+  }
+  .path-group {
+    grid-template-columns: 1fr;
+  }
+  .path-group label {
+    grid-column: auto;
+  }
 }
 .submit-btn {
   width: 100%;

@@ -34,6 +34,13 @@ function createProperty(name, value) {
   };
 }
 
+function toVantagePath(value) {
+  return String(value ?? '')
+    .replaceAll('{OriginalName}', '$(OriginalName)')
+    .replaceAll('{Date}', '$(Date)')
+    .replaceAll('{Time}', '$(Time)');
+}
+
 function buildVantageXML(workflowData) {
   const workflowActions = Array.isArray(workflowData.actions) ? workflowData.actions : [];
   const actions = workflowActions.map((action) => {
@@ -41,17 +48,17 @@ function buildVantageXML(workflowData) {
 
     switch (action.type) {
       case 'Watch':
-        properties.push(createProperty('WatchDirectory', action.watchFolder));
+        properties.push(createProperty('WatchDirectory', toVantagePath(action.watchFolder)));
         break;
       case 'Transcode':
         properties.push(
-          createProperty('WatchDirectory', action.watchFolder),
-          createProperty('OutputDirectory', action.outputFolder),
+          createProperty('WatchDirectory', toVantagePath(action.watchFolder)),
+          createProperty('OutputDirectory', toVantagePath(action.outputFolder)),
           createProperty('Preset', action.preset || action.profile || '')
         );
         break;
       case 'Deploy':
-        properties.push(createProperty('OutputDirectory', action.outputFolder));
+        properties.push(createProperty('OutputDirectory', toVantagePath(action.outputFolder)));
         break;
       default:
         throw new Error(`Desteklenmeyen Vantage action tipi: ${action.type}`);
