@@ -20,7 +20,14 @@
     "cml_total_bytes": 191571,
     "xml_parse_attempted": 101,
     "xml_parsed": 101,
-    "xml_parse_failures": 0
+    "xml_parse_failures": 0,
+    "parser_regression_status": "PASS",
+    "resolved_graph_edges": 1009,
+    "dangling_graph_edges": 0,
+    "disconnected_action_nodes": 1,
+    "files_with_variable_references": 89,
+    "unique_variable_references": 3829,
+    "unknown_structures": 3577
   },
   "root_elements": {
     "ExportableProcedure": 86,
@@ -51,7 +58,7 @@
   "cml": {
     "files": 58,
     "execution_during_ingestion": false,
-    "analysis_status": "not_started"
+    "analysis_status": "inventory_pending_semantic_model"
   },
   "license_manager": {
     "existing_project": "C:\\license-manager",

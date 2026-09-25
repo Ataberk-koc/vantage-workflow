@@ -12,7 +12,9 @@
     "preview": "vite preview",
     "electron": "electron .",
     "start": "concurrently \"npm run dev\" \"npm run electron\"",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run build && electron-builder",
+    "vantage-ai": "node bin/vantage-ai.cjs",
+    "test": "node --test tests/*.test.cjs"
   },
   "dependencies": {
     "vue": "^3.5.42",

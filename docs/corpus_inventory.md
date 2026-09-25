@@ -21,6 +21,8 @@ This inventory was generated from the external, read-only corpus. No source file
 
 `C:\Ata\General-Workflows` contains 39 additional XML files and should be treated as a secondary sample set until duplicates and provenance are classified.
 
+Phase 1 parser regression now covers the 101 primary XML files: 101 parsed, 0 parser failures, 1009 resolved sequence edges, 0 dangling references, 89 files with variable references, and 3577 preserved/unknown structures. One disconnected action warning remains in `Workflow\test.xml`.
+
 ## XML Root Types
 
 | Root | Files |
@@ -54,7 +56,8 @@ These numbers are confirmed by a read-only streaming scan performed on 2026-09-2
 ## Next Discovery Tasks
 
 1. Classify `ExportableProcedure`, `SubmitConfiguration`, `Composition`, and `Transformation` separately.
-2. Identify action instance identifiers and connection/reference elements.
-3. Enumerate distinct action kinds from the actual attributes, not from assumptions.
-4. Analyze all 58 CML files without executing them.
-5. Extract documentation text from PDF/DOCX sources and link findings to source locations.
+2. Expand variable producer/consumer and binding analysis.
+3. Analyze all 58 CML files without executing them.
+4. Add deterministic duplicate/missing-reference validation.
+5. Implement semantic XML diff and complete the CLI contract.
+6. Extract documentation text from PDF/DOCX sources and link findings to source locations.
