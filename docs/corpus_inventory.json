@@ -1,0 +1,68 @@
+{
+  "inventory_version": "0.1",
+  "generated_at": "2026-09-25",
+  "source_roots": [
+    {
+      "path": "C:\\Ata\\Workflow Tasarim Mimarisi\\Vantage\\Vantage",
+      "access": "read_only_external"
+    },
+    {
+      "path": "C:\\Ata\\General-Workflows",
+      "access": "read_only_external"
+    }
+  ],
+  "primary_corpus": {
+    "workflow_xml_files": 101,
+    "cml_files": 58,
+    "pdf_files": 34,
+    "docx_files": 7,
+    "xml_total_bytes": 1378672887,
+    "cml_total_bytes": 191571,
+    "xml_parse_attempted": 101,
+    "xml_parsed": 101,
+    "xml_parse_failures": 0
+  },
+  "root_elements": {
+    "ExportableProcedure": 86,
+    "SubmitConfiguration": 6,
+    "Composition": 6,
+    "Transformation": 3
+  },
+  "observed_element_counts": {
+    "Action": 2000,
+    "Condition": 439,
+    "Parameter": 172,
+    "Sequence": 1015,
+    "Template": 1577,
+    "Method": 2000,
+    "WorkflowVersion": 86
+  },
+  "observed_attribute_counts": {
+    "identifier": 5530,
+    "name": 4508,
+    "enabled": 4245,
+    "signature": 4002,
+    "priority": 4000,
+    "kind": 2593,
+    "facility": 2577,
+    "disposition": 1000,
+    "behavior": 1000
+  },
+  "cml": {
+    "files": 58,
+    "execution_during_ingestion": false,
+    "analysis_status": "not_started"
+  },
+  "license_manager": {
+    "existing_project": "C:\\license-manager",
+    "inspection": "read_only",
+    "integration_status": "not_started",
+    "product_id_verified": false
+  },
+  "unknown_files": [],
+  "limitations": [
+    "The corpus is outside this repository and was not copied or modified.",
+    "Element counts are structural observations, not semantic interpretations.",
+    "The 101 files include export/configuration roots that must be classified before workflow graph parsing."
+  ]
+}
